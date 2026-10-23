@@ -165,7 +165,7 @@ const en: Copy = {
     expEyebrow: 'Career', expTitle: 'Experience',
     certEyebrow: 'Credentials', certTitle: 'Certificates',
     issuedBy: 'Issued by', preview: 'Preview', certificate: 'Certificate', certificates: 'Certificates',
-    albumContents: 'Album contents', openOriginal: 'Open original certificate', closeCerts: 'Close certificates preview',
+    albumContents: 'Album contents', openOriginal: 'View original certificate', closeCerts: 'Close certificates preview',
     skillsEyebrow: 'Expertise', skillsTitle: 'Technical Skills',
     aboutEyebrow: 'The story', aboutTitle: 'About Me',
     availTitle: 'Availability', availRoles: 'GIS, Remote Sensing and Geospatial Analysis roles',
@@ -285,7 +285,7 @@ const it: Copy = {
     expEyebrow: 'Carriera', expTitle: 'Esperienza',
     certEyebrow: 'Credenziali', certTitle: 'Certificati',
     issuedBy: 'Rilasciato da', preview: 'Anteprima', certificate: 'Certificato', certificates: 'Certificati',
-    albumContents: "Contenuto dell'album", openOriginal: "Apri il certificato originale", closeCerts: "Chiudi l'anteprima dei certificati",
+    albumContents: "Contenuto dell'album", openOriginal: "Visualizza il certificato originale", closeCerts: "Chiudi l'anteprima dei certificati",
     skillsEyebrow: 'Know-how', skillsTitle: 'Competenze tecniche',
     aboutEyebrow: 'La mia storia', aboutTitle: 'Chi sono',
     availTitle: 'Disponibilità', availRoles: 'Ruoli in ambito GIS, Remote Sensing e Analisi Geospaziale',
@@ -399,22 +399,6 @@ function writeStore(key: string, value: string) {
   try { window.localStorage.setItem(key, value) } catch { /* storage unavailable */ }
 }
 
-function contourPaths(count: number, base: number, step: number, seed: number) {
-  return Array.from({ length: count }, (_, i) => {
-    const r = base + i * step
-    const N = 96
-    const pts: string[] = []
-    for (let k = 0; k <= N; k++) {
-      const a = (k / N) * Math.PI * 2
-      const wob = 1 + 0.1 * Math.sin(3 * a + seed + i * 0.22) + 0.06 * Math.sin(5 * a + seed * 1.7 - i * 0.31) + 0.035 * Math.sin(8 * a + seed * 0.6 + i * 0.5)
-      const rr = r * wob
-      pts.push(`${k === 0 ? 'M' : 'L'}${(300 + Math.cos(a) * rr).toFixed(1)} ${(300 + Math.sin(a) * rr * 0.92).toFixed(1)}`)
-    }
-    return pts.join(' ') + 'Z'
-  })
-}
-const CONTOURS = contourPaths(22, 36, 12.5, 1.3)
-
 let leafletPromise: Promise<any> | null = null
 function loadLeaflet(): Promise<any> {
   const w = window as any
@@ -487,17 +471,6 @@ function Magnetic({ children, className = '' }: { children: ReactNode; className
     <span ref={ref} onMouseMove={move} onMouseLeave={leave} className={`inline-block transition-transform duration-300 ease-out ${className}`}>
       {children}
     </span>
-  )
-}
-
-function ContourField({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 600 600" fill="none" aria-hidden="true">
-      {CONTOURS.map((d, i) => (
-        <path key={i} d={d} stroke="var(--gold)" strokeWidth={i % 5 === 0 ? 1.5 : 0.8} opacity={Math.max(0.08, 0.62 - i * 0.022)} />
-      ))}
-      <circle cx="300" cy="300" r="4" fill="var(--gold)" opacity=".7" />
-    </svg>
   )
 }
 
@@ -604,7 +577,7 @@ function App() {
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null)
   const [selectedCertificateIndex, setSelectedCertificateIndex] = useState(0)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [formStatus, setFormStatus] = useState<'idle' | 'sending' | 'sent' | 'activation' | 'error'>('idle')
+  const [formStatus, setFormStatus] = useState<'idle' | 'sending' | 'sent' | 'activation' | 'timeout' | 'error'>('idle')
 
   const t = COPY[lang]
 
@@ -727,8 +700,11 @@ function App() {
     if (!name || !email || !subject || !message) { setFormStatus('error'); return }
 
     setFormStatus('sending')
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15000)
     try {
       const res = await fetch(FORM_ENDPOINT, {
+        signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
@@ -754,8 +730,10 @@ function App() {
       } else {
         setFormStatus('error')
       }
-    } catch {
-      setFormStatus('error')
+    } catch (error) {
+      setFormStatus(error instanceof DOMException && error.name === 'AbortError' ? 'timeout' : 'error')
+    } finally {
+      window.clearTimeout(timeout)
     }
   }
 
@@ -841,52 +819,40 @@ function App() {
         .btn-ghost:hover {background:var(--gold);color:var(--on-gold);border-color:var(--gold);box-shadow:0 10px 34px -10px var(--glow-gold)}
 
         .grain::after {content:"";position:fixed;inset:0;pointer-events:none;z-index:90;opacity:var(--grain);mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
-        .hairline-grid {background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:88px 88px;-webkit-mask-image:radial-gradient(ellipse at 70% 30%,#000 10%,transparent 72%);mask-image:radial-gradient(ellipse at 70% 30%,#000 10%,transparent 72%)}
-        /* Premium Geospatial Minimalism: one restrained backdrop, Hero only. */
-        .geo-hero-surface {
-          background:
-            radial-gradient(ellipse 42% 60% at 82% 48%,rgba(24,110,80,.22),transparent 79%),
-            radial-gradient(ellipse 31% 40% at 90% 82%,rgba(209,173,110,.055),transparent 80%),
-            linear-gradient(118deg,#050b09 1%,#071610 59%,#0b2119 100%);
+        /* Hero: exactly one plain green gradient, with no imagery, contours or ornaments. */
+        #home {
+          background: linear-gradient(118deg, #071611 0%, #0b1f18 55%, #10261d 100%);
         }
-        .geo-hero-grid {
-          opacity:.22;
-          background-image:linear-gradient(rgba(214,184,122,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(214,184,122,.07) 1px,transparent 1px);
-          background-size:96px 96px;
-          -webkit-mask-image:radial-gradient(ellipse at 76% 45%,#000 0%,transparent 75%);
-          mask-image:radial-gradient(ellipse at 76% 45%,#000 0%,transparent 75%);
+        :root[data-theme='light'] #home {
+          background: linear-gradient(118deg, #f6f1e7 0%, #edf1e9 55%, #e5eee5 100%);
         }
-        .geo-hero-relief {
-          position:absolute;
-          width:min(59vw,790px);
-          height:auto;
-          top:8%;
-          right:-10%;
-          opacity:.19;
-          -webkit-mask-image:radial-gradient(ellipse at 50% 50%,#000 18%,transparent 78%);
-          mask-image:radial-gradient(ellipse at 50% 50%,#000 18%,transparent 78%);
+
+        /* Technical Skills: restrained, high-contrast card hover (no layout shift). */
+        .skill-card {
+          isolation:isolate;
+          background:var(--bg-alt);
+          box-shadow:inset 0 0 0 0 transparent;
+          transition:background-color .32s ease,box-shadow .32s ease;
         }
-        .geo-hero-relief path {stroke:var(--gold);stroke-width:.85;fill:none}
-        .geo-hero-halo {
-          position:absolute;
-          width:min(43vw,570px);
-          aspect-ratio:1;
-          top:19%;
-          right:2%;
-          border-radius:50%;
-          background:radial-gradient(circle,rgba(214,184,122,.105) 0%,rgba(28,103,74,.075) 40%,transparent 70%);
-          filter:blur(42px);
-          opacity:.58;
+        .skill-card::before {
+          content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+          background:radial-gradient(ellipse at 85% 12%,rgba(214,184,122,.095),transparent 65%);
+          opacity:0;transition:opacity .32s ease;
         }
-        :root[data-theme='light'] .geo-hero-surface {
-          background:radial-gradient(ellipse 48% 65% at 82% 45%,rgba(57,146,108,.16),transparent 80%),linear-gradient(116deg,#f6f1e7,#e7eee4);
+        .skill-card:hover {
+          background:var(--panel);
+          box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 36px rgba(214,184,122,.055);
+          z-index:1;
         }
-        :root[data-theme='light'] .geo-hero-relief {opacity:.15}
-        :root[data-theme='light'] .geo-hero-halo {opacity:.34}
-        @media(max-width:767px) {
-          .geo-hero-grid {opacity:.12;background-size:72px 72px}
-          .geo-hero-relief {width:112vw;right:-48%;top:26%;opacity:.09}
-          .geo-hero-halo {width:90vw;top:42%;right:-30%}
+        .skill-card:hover::before {opacity:1}
+        .skill-card-title {transition:color .32s ease}
+        .skill-card:hover .skill-card-title {color:var(--gold-hi)}
+        .skill-card:hover .skill-card-chip {border-color:var(--line-x)}
+        :root[data-theme='light'] .skill-card::before {
+          background:radial-gradient(ellipse at 85% 12%,rgba(138,106,47,.075),transparent 65%);
+        }
+        @media (prefers-reduced-motion:reduce) {
+          .skill-card,.skill-card::before,.skill-card-title {transition:none}
         }
 
         .reveal {opacity:0;transform:translateY(34px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)}
@@ -1018,16 +984,7 @@ function App() {
       <main id="main">
         {/* ------------------------------ HERO ------------------------------ */}
         <section id="home" className="relative isolate overflow-hidden">
-          {/* Restrained geospatial illustration, decorative and isolated to Hero. */}
-          <div aria-hidden="true" className="geo-hero-surface pointer-events-none absolute inset-0 -z-10" />
-          <div aria-hidden="true" className="geo-hero-grid pointer-events-none absolute inset-0 -z-10" />
-          <div aria-hidden="true" className="geo-hero-halo pointer-events-none -z-10" />
-          <svg aria-hidden="true" className="geo-hero-relief pointer-events-none -z-10" viewBox="0 0 860 780">
-            {Array.from({ length: 13 }, (_, index) => {
-              const r = 75 + index * 23
-              return <path key={index} d={`M ${430-r} 386 C ${410-r*.91} ${284-r*.7}, ${480-r*.43} ${171-r*.71}, 430 ${386-r} C ${525+r*.52} ${335-r*.62}, ${610+r*.62} ${350-r*.19}, ${430+r} 386 C ${515+r*.72} ${490+r*.53}, ${450+r*.35} ${558+r*.84}, 430 ${386+r} C ${340-r*.66} ${550+r*.7}, ${270-r*.85} ${442+r*.2}, ${430-r} 386 Z`} />
-            })}
-          </svg>
+          {/* Clean, solid gradient only: no decorative layers or SVG patterns. */}
 
           <div className="mx-auto grid max-w-[1500px] items-center gap-16 px-6 pb-24 pt-40 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)] lg:gap-10 lg:px-12 lg:pb-32 lg:pt-44">
             <div className="relative z-10 min-w-0">
@@ -1132,7 +1089,7 @@ function App() {
                             ) : project.image ? (
                               <img src={project.image} alt={`${project.title} — actual project map or interface`} loading="lazy" decoding="async" className="shot block h-full w-full object-contain object-center" />
                             ) : (
-                              <ContourField className="absolute inset-0 h-full w-full opacity-60" />
+                              <div className="h-full w-full bg-alt" aria-hidden="true" />
                             )}
                           </div>
                         </div>
@@ -1243,16 +1200,16 @@ function App() {
             <Reveal>
               <div className="grid gap-px overflow-hidden rounded-[6px] border bd md:grid-cols-2 xl:grid-cols-3" style={{ background: 'var(--line)' }}>
                 {t.skills.map(skill => (
-                  <article key={skill.number} className="bg-alt group relative flex h-full flex-col p-7 transition-colors duration-300 hover:bg-[var(--panel)] sm:p-9">
+                  <article key={skill.number} className="skill-card bg-alt group relative flex h-full flex-col p-7 sm:p-9">
                     <div className="flex min-h-[55px] items-center justify-between gap-3">
                       <span className="font-body c-gold shrink-0 text-[28px] font-medium leading-none tracking-[-.045em] tabular-nums opacity-95">{skill.number}</span>
                       <span className="c-soft whitespace-nowrap text-right text-[10px] font-semibold uppercase leading-none tracking-[.08em] sm:text-[11px]">{skill.label}</span>
                     </div>
-                    <h3 className="font-display c-ink mt-7 text-[clamp(1.75rem,2.1vw,2.1rem)] font-medium leading-[1.15]">{skill.title}</h3>
+                    <h3 className="skill-card-title font-display c-ink mt-7 text-[clamp(1.75rem,2.1vw,2.1rem)] font-medium leading-[1.15]">{skill.title}</h3>
                     <p className="c-body mt-4 text-[16px] font-normal leading-[1.75]">{skill.summary}</p>
                     <ul className="mt-7 flex flex-wrap content-start gap-2.5" aria-label={`${skill.title} — ${t.ui.csTools}`}>
                       {skill.tools.map(tool => (
-                        <li key={tool} className="c-hi rounded-full border bd px-3.5 py-2 text-[13px] leading-[1.35] transition-colors duration-300 hv-bd">{tool}</li>
+                        <li key={tool} className="skill-card-chip c-hi rounded-full border bd px-3.5 py-2 text-[13px] leading-[1.35] transition-colors duration-300 hv-bd">{tool}</li>
                       ))}
                     </ul>
                     <span aria-hidden="true" className="absolute bottom-0 left-0 h-px w-0 bg-gradient-to-r from-[var(--gold)] to-transparent transition-all duration-500 group-hover:w-full" />
@@ -1344,11 +1301,12 @@ function App() {
                   <div className="mt-6 flex flex-wrap items-center gap-6">
                     <Magnetic>
                       <button type="submit" disabled={formStatus === 'sending'} className="btn-gold group inline-flex min-h-[56px] items-center justify-center gap-3 rounded-full px-10 text-[12px] font-semibold uppercase tracking-[.24em] disabled:opacity-60">
-                        {formStatus === 'sending' ? t.ui.sending : t.ui.send} <IconArrow />
+                        {formStatus === 'sending' && <span aria-hidden="true" className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />}
+                        {formStatus === 'sending' ? t.ui.sending : t.ui.send} {formStatus !== 'sending' && <IconArrow />}
                       </button>
                     </Magnetic>
-                    <p role="status" aria-live="polite" className={`text-[14px] ${formStatus === 'error' || formStatus === 'activation' ? 'text-[#e7bd79]' : 'c-gold'}`}>
-                      {formStatus === 'sent' ? t.ui.sent : formStatus === 'activation' ? (lang === 'it' ? 'Per attivare il modulo, controlla la tua email e conferma il link ricevuto da FormSubmit. Poi riprova.' : 'Activation required: check your inbox for the FormSubmit confirmation link, activate the form, then try again.') : formStatus === 'error' ? t.ui.error : ''}
+                    <p role="status" aria-live="polite" className={`text-[14px] ${formStatus === 'error' || formStatus === 'activation' || formStatus === 'timeout' ? 'text-[#e7bd79]' : 'c-gold'}`}>
+                      {formStatus === 'sent' ? t.ui.sent : formStatus === 'activation' ? (lang === 'it' ? 'Per attivare il modulo, controlla la tua email e conferma il link ricevuto da FormSubmit. Poi riprova.' : 'Activation required: check your inbox for the FormSubmit confirmation link, activate the form, then try again.') : formStatus === 'timeout' ? (lang === 'it' ? 'La risposta sta impiegando troppo tempo. Controlla la tua email prima di riprovare, per evitare messaggi duplicati.' : 'The server is taking too long to respond. Check your inbox before retrying to avoid duplicate messages.') : formStatus === 'error' ? t.ui.error : ''}
                     </p>
                   </div>
                 </form>
@@ -1434,9 +1392,7 @@ function App() {
                   <p className="c-body mt-4 text-[15px] leading-7">{selectedCertificate.issuer}</p>
                   <p className="c-mute text-[13px] leading-6">{selectedCertificate.date}</p>
                   {selectedCertificate.note && <p className="c-soft mt-4 text-[14px] font-light leading-7">{selectedCertificate.note}</p>}
-                  {selectedCertificate.file && (
-                    <a href={selectedCertificate.file} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-6 inline-flex min-h-11 items-center justify-center rounded-full px-6 text-[11px] font-bold uppercase tracking-[.2em]">{t.ui.openOriginal}</a>
-                  )}
+                  <a href={selectedCertificate.file ?? selectedCertificate.image} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-6 inline-flex min-h-11 items-center justify-center rounded-full px-6 text-[11px] font-bold uppercase tracking-[.2em]">{t.ui.openOriginal}</a>
                 </div>
                 <div className="overflow-y-auto px-4 py-5">
                   <p className="c-mute px-2 text-[11px] font-bold uppercase tracking-[.24em]">{t.ui.albumContents}</p>
